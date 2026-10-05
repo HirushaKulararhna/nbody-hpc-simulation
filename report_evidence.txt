@@ -1,0 +1,273 @@
+############################################################
+# N-Body Benchmark Evidence
+# host cores : 16
+# gcc        : 13
+# mpirun     : mpirun (Open MPI) 4.1.6
+# STEPS=100  reps=2 (best-of)
+############################################################
+
+=== BUILD ===
+  serial_nbody  OK
+  openmp_nbody  OK
+  hybrid_nbody  OK
+
+############################################################
+# 1. SERIAL reference program (fixed N=1000, STEPS=100)
+############################################################
+Serial time: 0.3168 seconds
+
+############################################################
+# 2. OPENMP scaling sweep  -  N=1000
+############################################################
+$ ./openmp_nbody 1000 100 8 2
+N = 1000, STEPS = 100, best of 2 run(s), cores available = 16
+
+Serial baseline time: 0.3238 s
+
+Threads   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------
+serial    0.3238       1.00       100.0%       -         
+1         0.3005       1.08       107.8%       0.00e+00  
+2         0.1634       1.98       99.1%        0.00e+00  
+4         0.1026       3.16       78.9%        0.00e+00  
+8         0.0949       3.41       42.6%        0.00e+00  
+
+Wrote scaling.csv
+
+############################################################
+# 2. OPENMP scaling sweep  -  N=2000
+############################################################
+$ ./openmp_nbody 2000 100 8 2
+N = 2000, STEPS = 100, best of 2 run(s), cores available = 16
+
+Serial baseline time: 1.2292 s
+
+Threads   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------
+serial    1.2292       1.00       100.0%       -         
+1         1.2014       1.02       102.3%       0.00e+00  
+2         0.6721       1.83       91.4%        0.00e+00  
+4         0.4083       3.01       75.3%        0.00e+00  
+8         0.3743       3.28       41.0%        0.00e+00  
+
+Wrote scaling.csv
+
+############################################################
+# 2. OPENMP scaling sweep  -  N=4000
+############################################################
+$ ./openmp_nbody 4000 100 8 2
+N = 4000, STEPS = 100, best of 2 run(s), cores available = 16
+
+Serial baseline time: 4.9109 s
+
+Threads   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------
+serial    4.9109       1.00       100.0%       -         
+1         4.8228       1.02       101.8%       0.00e+00  
+2         2.8112       1.75       87.3%        0.00e+00  
+4         2.0550       2.39       59.7%        0.00e+00  
+8         1.4419       3.41       42.6%        0.00e+00  
+
+Wrote scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=1000, MPI ranks=1
+############################################################
+$ mpirun --bind-to none -np 1 ./hybrid_nbody 1000 100 4 2
+N = 1000, STEPS = 100, MPI ranks = 1, best of 2 run(s), cores available = 16
+
+Serial baseline time: 0.3019 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         0.3019       1.00       100.0%       -         
+1         1         0.3099       0.97       97.4%        0.00e+00  
+2         2         0.1927       1.57       78.3%        0.00e+00  
+4         4         0.0913       3.31       82.7%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=1000, MPI ranks=2
+############################################################
+$ mpirun --bind-to none -np 2 ./hybrid_nbody 1000 100 4 2
+N = 1000, STEPS = 100, MPI ranks = 2, best of 2 run(s), cores available = 16
+
+Serial baseline time: 0.3386 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         0.3386       1.00       100.0%       -         
+1         2         0.1640       2.06       103.2%       0.00e+00  
+2         4         0.0980       3.46       86.4%        0.00e+00  
+4         8         0.0926       3.66       45.7%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=1000, MPI ranks=4
+############################################################
+$ mpirun --bind-to none -np 4 ./hybrid_nbody 1000 100 4 2
+N = 1000, STEPS = 100, MPI ranks = 4, best of 2 run(s), cores available = 16
+
+Serial baseline time: 0.3824 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         0.3824       1.00       100.0%       -         
+1         4         0.1275       3.00       75.0%        0.00e+00  
+2         8         0.0997       3.84       47.9%        0.00e+00  
+4         16        0.0651       5.88       36.7%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=2000, MPI ranks=1
+############################################################
+$ mpirun --bind-to none -np 1 ./hybrid_nbody 2000 100 4 2
+N = 2000, STEPS = 100, MPI ranks = 1, best of 2 run(s), cores available = 16
+
+Serial baseline time: 1.2463 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         1.2463       1.00       100.0%       -         
+1         1         1.2395       1.01       100.5%       0.00e+00  
+2         2         0.7094       1.76       87.8%        0.00e+00  
+4         4         0.4757       2.62       65.5%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=2000, MPI ranks=2
+############################################################
+$ mpirun --bind-to none -np 2 ./hybrid_nbody 2000 100 4 2
+N = 2000, STEPS = 100, MPI ranks = 2, best of 2 run(s), cores available = 16
+
+Serial baseline time: 1.3967 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         1.3967       1.00       100.0%       -         
+1         2         0.6826       2.05       102.3%       0.00e+00  
+2         4         0.4444       3.14       78.6%        0.00e+00  
+4         8         0.3823       3.65       45.7%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=2000, MPI ranks=4
+############################################################
+$ mpirun --bind-to none -np 4 ./hybrid_nbody 2000 100 4 2
+N = 2000, STEPS = 100, MPI ranks = 4, best of 2 run(s), cores available = 16
+
+Serial baseline time: 1.6285 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         1.6285       1.00       100.0%       -         
+1         4         0.4165       3.91       97.8%        0.00e+00  
+2         8         0.3954       4.12       51.5%        0.00e+00  
+4         16        0.2585       6.30       39.4%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=4000, MPI ranks=1
+############################################################
+$ mpirun --bind-to none -np 1 ./hybrid_nbody 4000 100 4 2
+N = 4000, STEPS = 100, MPI ranks = 1, best of 2 run(s), cores available = 16
+
+Serial baseline time: 4.9407 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         4.9407       1.00       100.0%       -         
+1         1         4.8899       1.01       101.0%       0.00e+00  
+2         2         2.9348       1.68       84.2%        0.00e+00  
+4         4         2.0420       2.42       60.5%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=4000, MPI ranks=2
+############################################################
+$ mpirun --bind-to none -np 2 ./hybrid_nbody 4000 100 4 2
+N = 4000, STEPS = 100, MPI ranks = 2, best of 2 run(s), cores available = 16
+
+Serial baseline time: 5.5469 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         5.5469       1.00       100.0%       -         
+1         2         2.8370       1.96       97.8%        0.00e+00  
+2         4         2.0636       2.69       67.2%        0.00e+00  
+4         8         1.5121       3.67       45.9%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 3. HYBRID MPI+OpenMP sweep  -  N=4000, MPI ranks=4
+############################################################
+$ mpirun --bind-to none -np 4 ./hybrid_nbody 4000 100 4 2
+N = 4000, STEPS = 100, MPI ranks = 4, best of 2 run(s), cores available = 16
+
+Serial baseline time: 6.4771 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         6.4771       1.00       100.0%       -         
+1         4         2.1805       2.97       74.3%        0.00e+00  
+2         8         1.5321       4.23       52.8%        0.00e+00  
+4         16        1.0279       6.30       39.4%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+############################################################
+# 4. ACCURACY VERIFICATION
+############################################################
+==============================================
+ N-Body Accuracy Verification
+ N=1000 STEPS=100 threshold RMSE < 1e-10
+==============================================
+
+Building...
+
+Running OpenMP sweep (up to 4 threads)...
+N = 1000, STEPS = 100, best of 1 run(s), cores available = 16
+
+Serial baseline time: 0.3212 s
+
+Threads   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------
+serial    0.3212       1.00       100.0%       -         
+1         0.3079       1.04       104.3%       0.00e+00  
+2         0.1835       1.75       87.5%        0.00e+00  
+4         0.1508       2.13       53.3%        0.00e+00  
+
+Wrote scaling.csv
+
+Running Hybrid sweep (MPI=2, up to 2 threads)...
+N = 1000, STEPS = 100, MPI ranks = 2, best of 1 run(s), cores available = 16
+
+Serial baseline time: 0.3396 s
+
+Threads   Workers   Time(s)      Speedup    Efficiency   RMSE      
+---------------------------------------------------------------------
+serial    1         0.3396       1.00       100.0%       -         
+1         2         0.1911       1.78       88.8%        0.00e+00  
+2         4         0.1681       2.02       50.5%        0.00e+00  
+
+Wrote hybrid_scaling.csv
+
+==============================================
+ Accuracy Check
+==============================================
+  [OpenMP] PASS  (4 configs checked, worst RMSE = 0.000e+00 < 1e-10)
+  [Hybrid] PASS  (3 configs checked, worst RMSE = 0.000e+00 < 1e-10)
+
+ALL CHECKS PASSED
+
+############################################################
+# Evidence log written to report_evidence.txt
+############################################################

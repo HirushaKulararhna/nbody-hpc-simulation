@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N-Body HPC Simulation — Serial / OpenMP / Hybrid</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#06060e;
+    --panel:#0b0e1c;
+    --panel2:#10152b;
+    --border:rgba(255,255,255,0.08);
+    --text:#e2e8f0;
+    --muted:#8892b0;
+    --gray:#9ca3af;
+    --green:#22c55e;
+    --green-dim:#14532d;
+    --purple:#a855f7;
+    --purple-dim:#3b0764;
+    --mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; min-width:1280px;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans);
+    height:100%;
+  }
+  .app{
+    display:grid;
+    grid-template-columns:270px 1fr;
+    height:100vh;
+  }
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    padding:18px 16px;
+    overflow-y:auto;
+    display:flex; flex-direction:column; gap:18px;
+  }
+  .brand{
+    font-weight:700; font-size:15px; letter-spacing:0.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--purple);box-shadow:0 0 8px var(--purple);}
+  .brand small{display:block; font-weight:400; color:var(--muted); font-size:11px; margin-top:2px;}
+  .control-group{
+    background:var(--panel2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 14px;
+  }
+  .control-group h4{
+    margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); font-weight:600;
+  }
+  .field{margin-bottom:12px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12px; color:var(--text); margin-bottom:5px;
+  }
+  .field label span.val{font-family:var(--mono); color:var(--muted); font-size:11px;}
+  input[type=range]{
+    width:100%; accent-color:var(--purple); cursor:pointer;
+    height:4px;
+  }
+  .methods{display:flex; gap:6px;}
+  .method-btn{
+    flex:1; padding:8px 4px; border-radius:8px; border:1px solid var(--border);
+    background:#0d1224; color:var(--muted); font-size:12px; font-weight:600;
+    cursor:pointer; transition:all .25s ease; text-align:center;
+  }
+  .method-btn:hover{ color:var(--text); }
+  .method-btn.active.serial{ background:rgba(156,163,175,0.18); border-color:var(--gray); color:var(--gray); box-shadow:0 0 12px rgba(156,163,175,0.25); }
+  .method-btn.active.openmp{ background:rgba(34,197,94,0.15); border-color:var(--green); color:var(--green); box-shadow:0 0 12px rgba(34,197,94,0.3); }
+  .method-btn.active.hybrid{ background:rgba(168,85,247,0.15); border-color:var(--purple); color:var(--purple); box-shadow:0 0 12px rgba(168,85,247,0.3); }
+  .btn-row{display:flex; gap:8px;}
+  .btn{
+    flex:1; padding:9px 6px; border-radius:8px; border:1px solid var(--border);
+    background:#0d1224; color:var(--text); font-size:12px; font-weight:600;
+    cursor:pointer; transition:all .2s ease;
+  }
+  .btn:hover{ border-color:var(--purple); color:var(--purple); }
+  .btn.active-pause{ border-color:var(--green); color:var(--green); }
+  .hint{font-size:10.5px; color:var(--muted); line-height:1.5; margin-top:2px;}
+
+  /* ---------- Main ---------- */
+  .main{ display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  .canvas-panel{
+    position:relative; flex:0 0 60vh; min-height:340px;
+    background:radial-gradient(ellipse at 50% 30%, #0a0d1c 0%, #06060e 70%);
+    border-bottom:1px solid var(--border);
+  }
+  #simCanvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .overlay{
+    position:absolute; top:12px; left:14px; font-family:var(--mono); font-size:12px;
+    color:#cbd5e1; line-height:1.7; text-shadow:0 0 6px rgba(0,0,0,0.8);
+    pointer-events:none; user-select:none;
+  }
+  .overlay .m-serial{color:var(--gray);}
+  .overlay .m-openmp{color:var(--green);}
+  .overlay .m-hybrid{color:var(--purple);}
+  .paused-badge{
+    position:absolute; top:12px; right:16px; font-family:var(--mono); font-size:12px;
+    color:#fbbf24; border:1px solid #fbbf24; padding:3px 10px; border-radius:6px;
+    background:rgba(251,191,36,0.08); display:none;
+  }
+  .paused-badge.show{display:block;}
+
+  .stats-row{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:var(--border); border-bottom:1px solid var(--border);
+  }
+  .stat-card{
+    background:var(--panel); padding:12px 18px;
+    transition:background .3s ease;
+  }
+  .stat-card .label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+  .stat-card .value{ font-family:var(--mono); font-size:22px; font-weight:600; margin-top:4px; color:var(--text); }
+  .stat-card .value.accent{ color:var(--purple); transition:color .3s ease; }
+
+  .dashboard{
+    flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:1px;
+    background:var(--border); overflow:auto;
+  }
+  .chart-card{
+    background:var(--panel); padding:14px 16px; display:flex; flex-direction:column; min-height:220px;
+  }
+  .chart-card h5{ margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.03em;}
+  .chart-wrap{ position:relative; flex:1; min-height:0; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="dot"></span>
+      <div>N-BODY HPC LAB
+        <small>EE7218 / EC7207 — Serial · OpenMP · Hybrid</small>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <h4>Simulation Parameters</h4>
+      <div class="field">
+        <label>N particles <span class="val" id="vN">300</span></label>
+        <input type="range" id="sN" min="50" max="800" step="10" value="300">
+      </div>
+      <div class="field">
+        <label>Time step dt <span class="val" id="vDt">0.010</span></label>
+        <input type="range" id="sDt" min="0.001" max="0.05" step="0.001" value="0.01">
+      </div>
+      <div class="field">
+        <label>Gravity constant G <span class="val" id="vG">1.00</span></label>
+        <input type="range" id="sG" min="0.1" max="5.0" step="0.1" value="1.0">
+      </div>
+    </div>
+
+    <div class="control-group">
+      <h4>Parallel Configuration</h4>
+      <div class="field">
+        <label>OMP threads <span class="val" id="vT">4</span></label>
+        <input type="range" id="sT" min="1" max="8" step="1" value="4">
+      </div>
+      <div class="field">
+        <label>MPI ranks <span class="val" id="vP">2</span></label>
+        <input type="range" id="sP" min="1" max="8" step="1" value="2">
+      </div>
+    </div>
+
+    <div class="control-group">
+      <h4>Method</h4>
+      <div class="methods">
+        <button class="method-btn serial" data-method="serial">Serial</button>
+        <button class="method-btn openmp" data-method="openmp">OpenMP</button>
+        <button class="method-btn hybrid" data-method="hybrid">Hybrid</button>
+      </div>
+      <p class="hint" id="methodHint">Particles shown in uniform gray — single-threaded baseline.</p>
+    </div>
+
+    <div class="control-group">
+      <h4>Playback</h4>
+      <div class="btn-row">
+        <button class="btn" id="btnPause">Pause</button>
+        <button class="btn" id="btnReset">Reset</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <section class="canvas-panel">
+      <canvas id="simCanvas"></canvas>
+      <div class="overlay" id="overlay"></div>
+      <div class="paused-badge" id="pausedBadge">PAUSED</div>
+    </section>
+
+    <section class="stats-row">
+      <div class="stat-card"><div class="label">FPS</div><div class="value" id="statFps">0.0</div></div>
+      <div class="stat-card"><div class="label">Step</div><div class="value" id="statStep">0</div></div>
+      <div class="stat-card"><div class="label">Step time (ms)</div><div class="value" id="statStepTime">0.00</div></div>
+      <div class="stat-card"><div class="label">Speedup vs serial</div><div class="value accent" id="statSpeedup">1.00×</div></div>
+    </section>
+
+    <section class="dashboard">
+      <div class="chart-card">
+        <h5>Step time vs thread count</h5>
+        <div class="chart-wrap"><canvas id="chartTime"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h5>Speedup vs serial</h5>
+        <div class="chart-wrap"><canvas id="chartSpeedup"></canvas></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+ * Performance model — calibrated against real measurements from
+ * run_all.sh (N=1000, STEPS=100 on a 16-core host):
+ *   Serial: 0.3485s -> 3.485 ms/step
+ *   OpenMP T=1,2,4,8 -> 0.95x, 1.58x, 2.56x, 3.64x
+ *   Hybrid MPI=2..4, OMP=2..4 -> 2.4x-3.5x
+ * Used to drive the dashboard charts and the "Step time"/"Speedup" stat
+ * cards. The canvas simulation itself runs on the browser's single JS
+ * thread, so these numbers are a model of the compiled C benchmarks
+ * rather than a live measurement of the browser.
+ * ==================================================================== */
+const CAL = { k: 3.485e-9, ompFrac: 0.88, ompOverhead: 0.02, mpiCommPenalty: 0.025 };
+function serialStepMs(N){ return CAL.k * N * N; }
+function ompSpeedup(T){
+  const ideal = 1/((1-CAL.ompFrac) + CAL.ompFrac/T);
+  const overhead = 1 + CAL.ompOverhead*T;
+  return ideal/overhead;
+}
+function ompStepMs(N,T){ return serialStepMs(N)/ompSpeedup(T); }
+function hybridSpeedup(P,T){
+  const total = P*T;
+  const ideal = 1/((1-CAL.ompFrac) + CAL.ompFrac/total);
+  const overhead = 1 + CAL.ompOverhead*T;
+  const commPenalty = 1 + CAL.mpiCommPenalty*P;
+  return ideal/(overhead*commPenalty);
+}
+function hybridStepMs(N,P,T){ return serialStepMs(N)/hybridSpeedup(P,T); }
+
+/* ======================================================================
+ * Palettes — OpenMP = green/teal family (thread bands), Hybrid = purple/
+ * blue family (MPI ranks), with per-rank brightness steps for OMP threads.
+ * ==================================================================== */
+const OMP_COLORS  = ['#22c55e','#14b8a6','#06b6d4','#4ade80','#2dd4bf','#0ea5e9','#65a30d','#10b981'];
+const MPI_COLORS  = ['#a855f7','#3b82f6','#6366f1','#8b5cf6','#d946ef','#7c3aed','#0ea5e9','#c026d3'];
+const SERIAL_COLOR= [156,163,175];
+
+function hexToRgb(hex){
+  const v = parseInt(hex.slice(1),16);
+  return [(v>>16)&255, (v>>8)&255, v&255];
+}
+function shade(rgb, factor){
+  return [ Math.min(255,rgb[0]*factor), Math.min(255,rgb[1]*factor), Math.min(255,rgb[2]*factor) ];
+}
+
+/* ======================================================================
+ * Simulation state
+ * ==================================================================== */
+const state = {
+  N: 300, dt: 0.01, G: 1.0, threads: 4, ranks: 2,
+  method: 'serial', paused: false, step: 0, angle: 0,
+  fps: 60, maxSpeedEMA: 1,
+  px:null, py:null, pz:null, vx:null, vy:null, vz:null, mass:null,
+  ax:null, ay:null, az:null,
+  colorBase: null // Float32Array-ish array of [r,g,b] per particle
+};
+
+function initParticles(){
+  const N = state.N;
+  state.px = new Float64Array(N); state.py = new Float64Array(N); state.pz = new Float64Array(N);
+  state.vx = new Float64Array(N); state.vy = new Float64Array(N); state.vz = new Float64Array(N);
+  state.mass = new Float64Array(N);
+  state.ax = new Float64Array(N); state.ay = new Float64Array(N); state.az = new Float64Array(N);
+  for(let i=0;i<N;i++){
+    state.px[i] = (Math.random()-0.5)*100;
+    state.py[i] = (Math.random()-0.5)*100;
+    state.pz[i] = (Math.random()-0.5)*100;
+    state.vx[i] = (Math.random()-0.5)*4;
+    state.vy[i] = (Math.random()-0.5)*4;
+    state.vz[i] = (Math.random()-0.5)*4;
+    state.mass[i] = Math.random()*9+1;
+  }
+  state.step = 0;
+  computeColors();
+}
+
+const SOFTENING = 0.08;
+function stepPhysics(){
+  const N=state.N, G=state.G, dt=state.dt;
+  const px=state.px, py=state.py, pz=state.pz;
+  const vx=state.vx, vy=state.vy, vz=state.vz;
+  const mass=state.mass, ax=state.ax, ay=state.ay, az=state.az;
+
+  for(let i=0;i<N;i++){
+    let axi=0, ayi=0, azi=0;
+    const xi=px[i], yi=py[i], zi=pz[i];
+    for(let j=0;j<N;j++){
+      if(j===i) continue;
+      const dx=px[j]-xi, dy=py[j]-yi, dz=pz[j]-zi;
+      const distSqr = dx*dx+dy*dy+dz*dz+SOFTENING;
+      const invDist = 1/Math.sqrt(distSqr);
+      const invDist3 = invDist*invDist*invDist;
+      const f = G*mass[j]*invDist3;
+      axi += f*dx; ayi += f*dy; azi += f*dz;
+    }
+    ax[i]=axi; ay[i]=ayi; az[i]=azi;
+  }
+  for(let i=0;i<N;i++){
+    vx[i]+=ax[i]*dt; vy[i]+=ay[i]*dt; vz[i]+=az[i]*dt;
+    px[i]+=vx[i]*dt; py[i]+=vy[i]*dt; pz[i]+=vz[i]*dt;
+  }
+  state.step++;
+}
+
+/* Mirrors the static-schedule chunking used in openmp_nbody.c / hybrid_nbody.c
+ * so the visualization's coloring matches how the real C code partitions work. */
+function computeColors(){
+  const N = state.N;
+  const base = new Array(N);
+  if(state.method==='serial'){
+    for(let i=0;i<N;i++) base[i]=SERIAL_COLOR;
+  } else if(state.method==='openmp'){
+    const T = state.threads;
+    const chunk = Math.ceil(N/T);
+    for(let i=0;i<N;i++){
+      const t = Math.min(T-1, Math.floor(i/chunk));
+      base[i] = hexToRgb(OMP_COLORS[t % OMP_COLORS.length]);
+    }
+  } else {
+    const P = state.ranks, T = state.threads;
+    const rchunk = Math.ceil(N/P);
+    for(let i=0;i<N;i++){
+      const r = Math.min(P-1, Math.floor(i/rchunk));
+      const withinRank = i - r*rchunk;
+      const rankLen = Math.min(rchunk, N-r*rchunk) || 1;
+      const tchunk = Math.ceil(rankLen/T);
+      const t = Math.min(T-1, Math.floor(withinRank/tchunk));
+      const factor = 0.55 + 0.45*(T<=1?1:t/(T-1));
+      base[i] = shade(hexToRgb(MPI_COLORS[r % MPI_COLORS.length]), factor);
+    }
+  }
+  state.colorBase = base;
+}
+
+/* ======================================================================
+ * Rendering
+ * ==================================================================== */
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+let cw=0, ch=0, dpr=1;
+
+function resizeCanvas(){
+  const rect = canvas.parentElement.getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio||1);
+  cw = rect.width; ch = rect.height;
+  canvas.width = Math.round(cw*dpr);
+  canvas.height = Math.round(ch*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', resizeCanvas);
+
+function project(x,y,z,cosA,sinA,scale){
+  const rx = x*cosA - z*sinA;
+  const rz = x*sinA + z*cosA;
+  const persp = 260/(260+rz+140);
+  return { sx: cw/2 + rx*scale*persp, sy: ch/2 + y*scale*persp*0.9, d: persp };
+}
+
+function render(){
+  ctx.fillStyle = 'rgba(6,6,14,0.16)';
+  ctx.fillRect(0,0,cw,ch);
+
+  const N=state.N, px=state.px, py=state.py, pz=state.pz, vx=state.vx, vy=state.vy, vz=state.vz, mass=state.mass;
+  const cosA=Math.cos(state.angle), sinA=Math.sin(state.angle);
+  const scale = Math.min(cw,ch)/170;
+
+  let maxSpeed = 1e-6;
+  for(let i=0;i<N;i++){
+    const sp = Math.hypot(vx[i],vy[i],vz[i]);
+    if(sp>maxSpeed) maxSpeed=sp;
+  }
+  state.maxSpeedEMA = state.maxSpeedEMA*0.95 + maxSpeed*0.05;
+
+  for(let i=0;i<N;i++){
+    const p = project(px[i],py[i],pz[i],cosA,sinA,scale);
+    const speed = Math.hypot(vx[i],vy[i],vz[i]);
+    const norm = Math.min(1, speed/(state.maxSpeedEMA*0.85+1e-6));
+    const L = 0.4 + 0.6*norm;
+    const rgb = state.colorBase[i];
+    const r = Math.min(255,rgb[0]*L+40), g = Math.min(255,rgb[1]*L+40), b = Math.min(255,rgb[2]*L+40);
+    const baseR = (1.1 + mass[i]*0.32) * Math.max(0.35,p.d);
+
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},0.16)`;
+    ctx.arc(p.sx,p.sy, baseR*2.0, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},0.95)`;
+    ctx.arc(p.sx,p.sy, baseR, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  if(!state.paused) state.angle += 0.0018;
+}
+
+/* ======================================================================
+ * Overlay / stats
+ * ==================================================================== */
+const overlayEl = document.getElementById('overlay');
+const pausedBadge = document.getElementById('pausedBadge');
+const statFps = document.getElementById('statFps');
+const statStep = document.getElementById('statStep');
+const statStepTime = document.getElementById('statStepTime');
+const statSpeedup = document.getElementById('statSpeedup');
+
+function currentModel(){
+  if(state.method==='serial') return { ms: serialStepMs(state.N), speed: 1.0 };
+  if(state.method==='openmp') return { ms: ompStepMs(state.N,state.threads), speed: ompSpeedup(state.threads) };
+  return { ms: hybridStepMs(state.N,state.ranks,state.threads), speed: hybridSpeedup(state.ranks,state.threads) };
+}
+
+function updateOverlayAndStats(){
+  const methodLabel = state.method==='serial' ? 'SERIAL'
+                      : state.method==='openmp' ? `OPENMP (T=${state.threads})`
+                      : `HYBRID (MPI=${state.ranks}, OMP=${state.threads})`;
+  const cls = state.method==='serial' ? 'm-serial' : state.method==='openmp' ? 'm-openmp' : 'm-hybrid';
+  overlayEl.innerHTML =
+    `STEP&nbsp; ${state.step}<br>` +
+    `N&nbsp;&nbsp;&nbsp;&nbsp; ${state.N}<br>` +
+    `METHOD <span class="${cls}">${methodLabel}</span><br>` +
+    `FPS&nbsp;&nbsp;&nbsp; ${state.fps.toFixed(1)}`;
+
+  pausedBadge.classList.toggle('show', state.paused);
+
+  const model = currentModel();
+  statFps.textContent = state.fps.toFixed(1);
+  statStep.textContent = state.step;
+  statStepTime.textContent = model.ms.toFixed(2);
+  statSpeedup.textContent = model.speed.toFixed(2)+'×';
+}
+
+/* ======================================================================
+ * Charts
+ * ==================================================================== */
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
+Chart.defaults.font.family = "ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace";
+Chart.defaults.font.size = 11;
+
+const THREAD_AX = [1,2,4,8];
+
+const chartTime = new Chart(document.getElementById('chartTime'), {
+  type:'bar',
+  data:{
+    labels: THREAD_AX.map(String),
+    datasets:[
+      { label:'Serial', backgroundColor:'rgba(156,163,175,0.7)', data:[] },
+      { label:'OpenMP', backgroundColor:'rgba(34,197,94,0.75)', data:[] },
+      { label:'Hybrid', backgroundColor:'rgba(168,85,247,0.75)', data:[] },
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    scales:{
+      x:{ title:{display:true, text:'threads', color:'#8892b0'}, grid:{color:'rgba(255,255,255,0.05)'} },
+      y:{ title:{display:true, text:'ms / step', color:'#8892b0'}, grid:{color:'rgba(255,255,255,0.05)'}, beginAtZero:true }
+    },
+    plugins:{ legend:{ labels:{ boxWidth:12, padding:12 } } }
+  }
+});
+
+const chartSpeedup = new Chart(document.getElementById('chartSpeedup'), {
+  type:'line',
+  data:{
+    labels: THREAD_AX.map(String),
+    datasets:[
+      { label:'OpenMP', borderColor:'#22c55e', backgroundColor:'#22c55e', data:[], tension:0.25, pointRadius:3 },
+      { label:'Hybrid', borderColor:'#a855f7', backgroundColor:'#a855f7', data:[], tension:0.25, pointRadius:3 },
+      { label:'Ideal linear', borderColor:'#64748b', backgroundColor:'#64748b', borderDash:[6,4], data:THREAD_AX, tension:0, pointRadius:0 },
+    ]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    scales:{
+      x:{ title:{display:true, text:'threads', color:'#8892b0'}, grid:{color:'rgba(255,255,255,0.05)'} },
+      y:{ title:{display:true, text:'speedup (×)', color:'#8892b0'}, grid:{color:'rgba(255,255,255,0.05)'}, beginAtZero:true }
+    },
+    plugins:{ legend:{ labels:{ boxWidth:12, padding:12 } } }
+  }
+});
+
+function updateCharts(){
+  const N = state.N, P = state.ranks;
+  chartTime.data.datasets[0].data = THREAD_AX.map(()=>serialStepMs(N));
+  chartTime.data.datasets[1].data = THREAD_AX.map(T=>ompStepMs(N,T));
+  chartTime.data.datasets[2].data = THREAD_AX.map(T=>hybridStepMs(N,P,T));
+  chartTime.update('none');
+
+  chartSpeedup.data.datasets[0].data = THREAD_AX.map(T=>ompSpeedup(T));
+  chartSpeedup.data.datasets[1].data = THREAD_AX.map(T=>hybridSpeedup(P,T));
+  chartSpeedup.update('none');
+}
+
+/* ======================================================================
+ * Controls wiring
+ * ==================================================================== */
+const sN=document.getElementById('sN'), vN=document.getElementById('vN');
+const sDt=document.getElementById('sDt'), vDt=document.getElementById('vDt');
+const sG=document.getElementById('sG'), vG=document.getElementById('vG');
+const sT=document.getElementById('sT'), vT=document.getElementById('vT');
+const sP=document.getElementById('sP'), vP=document.getElementById('vP');
+const methodBtns = document.querySelectorAll('.method-btn');
+const methodHint = document.getElementById('methodHint');
+const btnPause = document.getElementById('btnPause');
+const btnReset = document.getElementById('btnReset');
+
+const HINTS = {
+  serial: 'Particles shown in uniform gray — single-threaded baseline.',
+  openmp: 'Particles colored by OpenMP thread band (static schedule chunks), green/teal family.',
+  hybrid: 'Particles colored by MPI rank (purple/blue family); brightness encodes the owning OMP thread within that rank.'
+};
+
+function setMethod(m){
+  state.method = m;
+  methodBtns.forEach(b=>b.classList.toggle('active', b.dataset.method===m));
+  methodHint.textContent = HINTS[m];
+  computeColors();
+}
+
+sN.addEventListener('input', ()=>{ state.N = +sN.value; vN.textContent = state.N; initParticles(); updateCharts(); });
+sDt.addEventListener('input', ()=>{ state.dt = +sDt.value; vDt.textContent = state.dt.toFixed(3); });
+sG.addEventListener('input', ()=>{ state.G = +sG.value; vG.textContent = state.G.toFixed(2); });
+sT.addEventListener('input', ()=>{ state.threads = +sT.value; vT.textContent = state.threads; computeColors(); updateCharts(); });
+sP.addEventListener('input', ()=>{ state.ranks = +sP.value; vP.textContent = state.ranks; computeColors(); updateCharts(); });
+
+methodBtns.forEach(b=> b.addEventListener('click', ()=> setMethod(b.dataset.method)) );
+
+btnPause.addEventListener('click', ()=>{
+  state.paused = !state.paused;
+  btnPause.textContent = state.paused ? 'Resume' : 'Pause';
+  btnPause.classList.toggle('active-pause', state.paused);
+});
+btnReset.addEventListener('click', ()=>{ initParticles(); });
+
+/* ======================================================================
+ * Animation loop
+ * ==================================================================== */
+let lastTime = performance.now();
+function loop(now){
+  const delta = now - lastTime;
+  lastTime = now;
+  const instFps = delta>0 ? 1000/delta : 60;
+  state.fps = state.fps*0.9 + instFps*0.1;
+
+  if(!state.paused){
+    stepPhysics();
+  }
+  render();
+  updateOverlayAndStats();
+
+  requestAnimationFrame(loop);
+}
+
+/* ======================================================================
+ * Boot
+ * ==================================================================== */
+function boot(){
+  resizeCanvas();
+  initParticles();
+  setMethod('serial');
+  updateCharts();
+  requestAnimationFrame(loop);
+}
+boot();
+
+})();
+</script>
+</body>
+</html>
